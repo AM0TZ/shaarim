@@ -22,7 +22,8 @@ jobs:
           probe "https://api.exchange.coinbase.com/products/QNT-USD/stats" coinbase-qnt
           probe "https://api.exchange.coinbase.com/products/XLM-USD/stats" coinbase-xlm
           probe "https://api.gold-api.com/price/XAU" goldapi-xau
-          probe "https://api.gold-api.com/price/XPD" goldapi-xpd
+          probe "https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?range=1d&interval=1d" yahoo-usdtry
+          probe "https://query1.finance.yahoo.com/v8/finance/chart/CHFILS=X?range=1d&interval=1d" yahoo-chfils
           curl -sS -m 15 "https://api.coinbase.com/v2/exchange-rates?currency=USD" | python3 -c "import sys,json; r=json.load(sys.stdin)['data']['rates']; print('::notice title=rates-keys::'+' '.join(k+'='+r.get(k,'MISSING') for k in ['ILS','EUR','GBP','CHF','JPY','CAD','AUD','CNY','TRY','RUB','XAU','XAG','XPT','XPD','AVAX','DOT','LINK']))"
 
       - uses: actions/setup-java@v5

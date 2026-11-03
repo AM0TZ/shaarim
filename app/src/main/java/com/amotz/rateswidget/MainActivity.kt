@@ -181,7 +181,8 @@ class MainActivity : Activity() {
             "• מטבעות: Coinbase exchange rates\n" +
             "• קריפטו: Coinbase Exchange (שינוי 24 שעות)\n" +
             "• מתכות: gold-api.com (מחיר ספוט)\n" +
-            "שינוי במטבעות ובמתכות מחושב מול הערך האחרון של אתמול שנשמר במכשיר.",
+            "• שינוי יומי במטבעות ובמתכות: Yahoo Finance (מול סגירה קודמת; במתכות לפי חוזי COMEX/NYMEX)\n" +
+            "אם Yahoo לא זמין, השינוי מחושב מול הערך האחרון של אתמול שנשמר במכשיר.",
             11f, MUTED
         ).apply { setPadding(0, dp(18), 0, 0) })
     }

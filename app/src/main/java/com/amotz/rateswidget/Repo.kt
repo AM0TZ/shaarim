@@ -20,6 +20,7 @@ data class Row(val item: Item, val price: String, val change: Double?, val unit:
  *  - Fiat (and fallback for everything): Coinbase exchange rates  api.coinbase.com/v2/exchange-rates
  *  - Crypto price + 24h change:          Coinbase Exchange        api.exchange.coinbase.com/products/X-USD/stats
  *  - Precious metals spot:               Gold API                 api.gold-api.com/price/XAU
+ *  - Daily change % (fiat, metals):      Yahoo Finance chart      query1.finance.yahoo.com/v8/finance/chart/USDILS=X
  * All raw prices are stored as USD per unit; the ILS rate is stored separately.
  */
 object Repo {
@@ -38,16 +39,41 @@ object Repo {
     fun lastError(ctx: Context) = prefs(ctx).getString("lastError", null)
 
     // ---------- network ----------
-    private fun get(url: String): String {
+    private const val BROWSER_UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+
+    private fun get(url: String, ua: String = UA): String {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 6000; c.readTimeout = 6000
-        c.setRequestProperty("User-Agent", UA)
+        c.setRequestProperty("User-Agent", ua)
         c.setRequestProperty("Accept", "application/json")
         try {
             val code = c.responseCode
             if (code !in 200..299) throw RuntimeException("HTTP $code")
             return c.inputStream.bufferedReader().use { it.readText() }
         } finally { c.disconnect() }
+    }
+
+    /** Daily change % (vs previous close) from Yahoo Finance chart meta. */
+    private fun yahooChange(symbol: String): Double {
+        val m = JSONObject(get("https://query1.finance.yahoo.com/v8/finance/chart/$symbol?range=1d&interval=1d", BROWSER_UA))
+            .getJSONObject("chart").getJSONArray("result").getJSONObject(0).getJSONObject("meta")
+        if (m.has("regularMarketChangePercent")) return m.getDouble("regularMarketChangePercent")
+        val price = m.getDouble("regularMarketPrice")
+        val prev = m.optDouble("chartPreviousClose", m.optDouble("previousClose", Double.NaN))
+        if (prev.isNaN() || prev <= 0) throw RuntimeException("no previous close")
+        return (price / prev - 1) * 100
+    }
+
+    private val METAL_FUT = mapOf("XAU" to "GC=F", "XAG" to "SI=F", "XPT" to "PL=F", "XPD" to "PA=F")
+
+    /** Change % of 1 unit of [code] in ILS. Direct pair if Yahoo has it, else derived via USD. */
+    private fun fiatChangeIls(code: String, usdIls: Double?): Double {
+        if (code == "USD") return usdIls ?: yahooChange("USDILS=X")
+        return try { yahooChange("${code}ILS=X") } catch (t: Throwable) {
+            val u = usdIls ?: yahooChange("USDILS=X")
+            val ux = yahooChange("USD$code=X")              // USD priced in X
+            ((1 + u / 100) / (1 + ux / 100) - 1) * 100
+        }
     }
 
     @Volatile private var running = false
@@ -100,6 +126,25 @@ object Repo {
                 }
             }
             val results = try { pool.invokeAll(jobs, 15, TimeUnit.SECONDS) } finally { pool.shutdownNow() }
+
+            // 3) daily change % from Yahoo Finance (fiat vs ILS, metals in USD); fallback = saved yesterday value
+            val usdIlsChg = try { yahooChange("USDILS=X") } catch (t: Throwable) { null }
+            if (usdIlsChg != null) e.putFloat("y_ILSRATE", usdIlsChg.toFloat()) else e.remove("y_ILSRATE")
+            val ypool = Executors.newFixedThreadPool(6)
+            val yjobs = Catalog.items.filter { it.code in sel && it.cat != Cat.CRYPTO }.map { item ->
+                Callable {
+                    val c = try {
+                        if (item.cat == Cat.FIAT) fiatChangeIls(item.code, usdIlsChg)
+                        else yahooChange(METAL_FUT.getValue(item.code))
+                    } catch (t: Throwable) { null }
+                    item.code to c
+                }
+            }
+            val yres = try { ypool.invokeAll(yjobs, 15, TimeUnit.SECONDS) } finally { ypool.shutdownNow() }
+            for (f in yres) {
+                val (code, c) = try { f.get() } catch (t: Throwable) { continue }
+                if (c != null) e.putFloat("y_$code", c.toFloat()) else e.remove("y_$code")
+            }
             for (f in results) {
                 val r = try { f.get() } catch (t: Throwable) { null } ?: continue
                 snapshot(p, e, r.first, r.second)
@@ -129,6 +174,7 @@ object Repo {
 
     private fun value(p: SharedPreferences, code: String) = p.getFloat("v_$code", 0f).toDouble().takeIf { it > 0 }
     private fun prev(p: SharedPreferences, code: String) = p.getFloat("prev_$code", 0f).toDouble().takeIf { it > 0 }
+    private fun ychg(p: SharedPreferences, code: String) = if (p.contains("y_$code")) p.getFloat("y_$code", 0f).toDouble() else null
 
     // ---------- display ----------
     fun rows(ctx: Context, cat: Cat, onlySelected: Boolean): List<Row> {
@@ -145,7 +191,7 @@ object Repo {
                 Cat.FIAT -> {
                     val v = if (usd != null && ils != null) usd * ils * item.per else null
                     val v0 = if (usdPrev != null && ilsPrev != null) usdPrev * ilsPrev * item.per else null
-                    Row(item, v?.let { "₪" + fmt(it) } ?: "—", pct(v, v0), "₪ ל־${item.per} ${item.code}")
+                    Row(item, v?.let { "₪" + fmt(it) } ?: "—", ychg(p, item.code) ?: pct(v, v0), "₪ ל־${item.per} ${item.code}")
                 }
                 Cat.CRYPTO -> {
                     val f = if (inIls) ils!! else 1.0
@@ -159,7 +205,14 @@ object Repo {
                     val g = if (perGram) OZ_G else 1.0
                     val v = usd?.let { it * f / g }
                     val v0 = usdPrev?.let { it * f0 / g }
-                    Row(item, v?.let { (if (inIls) "₪" else "$") + fmt(it) } ?: "—", pct(v, v0),
+                    val yc = ychg(p, item.code)
+                    val yu = ychg(p, "ILSRATE")
+                    val chg = when {
+                        yc != null && !inIls -> yc
+                        yc != null && yu != null -> ((1 + yc / 100) * (1 + yu / 100) - 1) * 100
+                        else -> pct(v, v0)
+                    }
+                    Row(item, v?.let { (if (inIls) "₪" else "$") + fmt(it) } ?: "—", chg,
                         if (perGram) "לגרם" else "לאונקיה")
                 }
             }
