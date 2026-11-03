@@ -2,7 +2,7 @@ name: Build Rates Widget APK
 
 on:
   push:
-    branches: [rates-widget]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -41,10 +41,10 @@ jobs:
             exit 1
           }
 
-      - name: Publish APK as the "rates-widget-latest" release
+      - name: Publish APK as the "latest" release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk RatesWidget.apk
-          gh release delete rates-widget-latest --yes --cleanup-tag || true
-          gh release create rates-widget-latest RatesWidget.apk --target "$GITHUB_SHA" --title "Rates Widget – latest build" --notes "Built from ${GITHUB_SHA::7}" --latest=false
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest RatesWidget.apk --target "$GITHUB_SHA" --title "Latest build" --notes "Built from ${GITHUB_SHA::7}"

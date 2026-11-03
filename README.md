@@ -5,4 +5,4 @@
 - קריפטו: Coinbase Exchange (שינוי 24 שעות)
 - מתכות: gold-api.com
 
-ה־APK נבנה אוטומטית ב־GitHub Actions ומתפרסם ב־release בשם `rates-widget-latest`.
+ה־APK נבנה אוטומטית ב־GitHub Actions ומתפרסם ב־release בשם `latest`.
