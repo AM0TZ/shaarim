@@ -52,6 +52,14 @@ class MainActivity : Activity() {
         render()
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.hasExtra(RatesWidget.EXTRA_CAT)) {
+            cat = Cat.values()[intent.getIntExtra(RatesWidget.EXTRA_CAT, 0).coerceIn(0, 2)]
+            render()
+        }
+    }
+
     override fun onResume() { super.onResume(); ui.post(ticker) }
     override fun onPause() { super.onPause(); ui.removeCallbacks(ticker) }
 
@@ -104,7 +112,7 @@ class MainActivity : Activity() {
         tabs.setPadding(dp(4), dp(4), dp(4), dp(4))
         root.addView(tabs)
 
-        root.addView(text("סמנו מה יוצג בווידג'ט (עד ${Catalog.WIDGET_MAX} בכל קטגוריה)", 12f, MUTED).apply {
+        root.addView(text("סמנו מה יוצג בווידג'ט — כל הנבחרים מוצגים יחד ברשימה אחת", 12f, MUTED).apply {
             setPadding(0, dp(12), 0, dp(6))
         })
 
@@ -116,21 +124,15 @@ class MainActivity : Activity() {
             row.addView(CheckBox(this).apply {
                 isChecked = r.item.code in sel
                 buttonTintList = android.content.res.ColorStateList.valueOf(ACCENT)
-                setOnCheckedChangeListener { cb, on ->
+                setOnCheckedChangeListener { _, on ->
                     val now = Repo.selected(this@MainActivity).toMutableSet()
-                    if (on) {
-                        val inCat = now.count { Catalog.get(it)?.cat == cat }
-                        if (inCat >= Catalog.WIDGET_MAX) {
-                            Toast.makeText(this@MainActivity, "הווידג'ט מציג עד ${Catalog.WIDGET_MAX} פריטים בכל קטגוריה", Toast.LENGTH_SHORT).show()
-                            cb.isChecked = false; return@setOnCheckedChangeListener
-                        }
-                        now.add(r.item.code)
-                    } else now.remove(r.item.code)
+                    if (on) now.add(r.item.code) else now.remove(r.item.code)
                     Repo.setSelected(this@MainActivity, now)
                     RatesWidget.renderAll(applicationContext)
                     if (on) refresh()
                 }
             })
+            row.addView(icon(r.item), LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(10) })
             val name = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             name.addView(text(r.item.he, 16f, TEXT))
             name.addView(text(r.unit, 11f, MUTED))
@@ -169,7 +171,7 @@ class MainActivity : Activity() {
                 setOnClickListener { mgr.requestPinAppWidget(ComponentName(this@MainActivity, RatesWidget::class.java), null, null) }
             }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) })
         }
-        root.addView(text("בווידג'ט: הקישו על \"מטבעות / קריפטו / מתכות\" כדי להחליף קטגוריה, ועל ⟳ לרענון.", 12f, MUTED).apply {
+        root.addView(text("בווידג'ט: גוללים לרשימה המלאה, ⟳ לרענון, ונגיעה בשורה פותחת את האפליקציה בקטגוריה שלה.", 12f, MUTED).apply {
             setPadding(0, dp(10), 0, 0)
         })
 
@@ -200,6 +202,19 @@ class MainActivity : Activity() {
         }
         box.addView(seg)
         return box
+    }
+
+    private fun icon(it: Item) = TextView(this).apply {
+        text = it.glyph
+        gravity = Gravity.CENTER
+        setTextColor(Color.WHITE)
+        typeface = Typeface.DEFAULT_BOLD
+        textSize = when { it.color == 0 -> 19f; it.glyph.length > 1 -> 13f; else -> 16f }
+        includeFontPadding = false
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(if (it.color == 0) Catalog.NEUTRAL else it.color)
+        }
     }
 
     private fun hbox() = LinearLayout(this).apply {

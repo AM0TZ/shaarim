@@ -30,5 +30,10 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/rates_widget_info" />
         </receiver>
+
+        <service
+            android:name=".RatesListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
     </application>
 </manifest>

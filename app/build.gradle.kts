@@ -11,8 +11,8 @@ android {
         applicationId = "com.amotz.rateswidget"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     // Fixed signing key so new builds install over old ones without uninstalling.

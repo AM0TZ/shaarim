@@ -7,9 +7,10 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.SystemClock
-import android.view.View
 import android.widget.RemoteViews
+import android.widget.RemoteViewsService
 
 class RatesWidget : AppWidgetProvider() {
 
@@ -25,48 +26,24 @@ class RatesWidget : AppWidgetProvider() {
         (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(alarmIntent(ctx))
     }
 
-    override fun onDeleted(ctx: Context, ids: IntArray) {
-        val e = Repo.prefs(ctx).edit()
-        ids.forEach { e.remove("tab_$it") }
-        e.apply()
-    }
-
     override fun onReceive(ctx: Context, intent: Intent) {
-        when (intent.action) {
-            ACTION_TAB -> {
-                val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
-                val cat = intent.getIntExtra(EXTRA_CAT, 0)
-                Repo.prefs(ctx).edit().putInt("tab_$id", cat).apply()
-                render(ctx, AppWidgetManager.getInstance(ctx), id)
-                if (System.currentTimeMillis() - Repo.updatedAt(ctx) > 5 * 60_000) refreshAsync(ctx, goAsync())
-            }
-            ACTION_REFRESH -> refreshAsync(ctx, goAsync(), showLoading = true)
-            else -> super.onReceive(ctx, intent)
-        }
+        if (intent.action == ACTION_REFRESH) refreshAsync(ctx, goAsync(), showLoading = true)
+        else super.onReceive(ctx, intent)
     }
 
     companion object {
-        const val ACTION_TAB = "com.amotz.rateswidget.TAB"
         const val ACTION_REFRESH = "com.amotz.rateswidget.REFRESH"
         const val EXTRA_CAT = "cat"
-
-        private val TABS = intArrayOf(R.id.tab0, R.id.tab1, R.id.tab2)
-        private val ROWS = intArrayOf(R.id.row0, R.id.row1, R.id.row2, R.id.row3, R.id.row4, R.id.row5, R.id.row6)
-        private val NAMES = intArrayOf(R.id.name0, R.id.name1, R.id.name2, R.id.name3, R.id.name4, R.id.name5, R.id.name6)
-        private val PRICES = intArrayOf(R.id.price0, R.id.price1, R.id.price2, R.id.price3, R.id.price4, R.id.price5, R.id.price6)
-        private val CHGS = intArrayOf(R.id.chg0, R.id.chg1, R.id.chg2, R.id.chg3, R.id.chg4, R.id.chg5, R.id.chg6)
-
-        private const val UP = 0xFF3FB950.toInt()
-        private const val DOWN = 0xFFF85149.toInt()
-        private const val MUTED = 0xFF8B949E.toInt()
-        private const val TEXT = 0xFFE6EDF3.toInt()
 
         fun ids(ctx: Context): IntArray =
             AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, RatesWidget::class.java))
 
+        /** Redraw header + reload list data on every widget. */
         fun renderAll(ctx: Context, loading: Boolean = false) {
             val mgr = AppWidgetManager.getInstance(ctx)
-            ids(ctx).forEach { render(ctx, mgr, it, loading) }
+            val ids = ids(ctx)
+            ids.forEach { render(ctx, mgr, it, loading) }
+            if (ids.isNotEmpty()) mgr.notifyAppWidgetViewDataChanged(ids, R.id.list)
         }
 
         fun refreshAsync(ctx: Context, pending: android.content.BroadcastReceiver.PendingResult?, showLoading: Boolean = false) {
@@ -98,48 +75,34 @@ class RatesWidget : AppWidgetProvider() {
             am.setInexactRepeating(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + ms, ms, pi)
         }
 
-        private fun pi(ctx: Context, action: String, id: Int, cat: Int, req: Int): PendingIntent =
-            PendingIntent.getBroadcast(
-                ctx, req,
-                Intent(ctx, RatesWidget::class.java).setAction(action)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).putExtra(EXTRA_CAT, cat),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
         fun render(ctx: Context, mgr: AppWidgetManager, id: Int, loading: Boolean = false) {
             val rv = RemoteViews(ctx.packageName, R.layout.widget)
-            val tab = Repo.prefs(ctx).getInt("tab_$id", 0).coerceIn(0, 2)
-            val cat = Cat.values()[tab]
 
-            Cat.values().forEachIndexed { i, c ->
-                rv.setTextViewText(TABS[i], c.he)
-                rv.setTextColor(TABS[i], if (i == tab) TEXT else MUTED)
-                rv.setInt(TABS[i], "setBackgroundResource", if (i == tab) R.drawable.tab_sel else 0)
-                rv.setOnClickPendingIntent(TABS[i], pi(ctx, ACTION_TAB, id, i, id * 10 + i))
-            }
-            rv.setOnClickPendingIntent(R.id.refresh, pi(ctx, ACTION_REFRESH, id, 0, id * 10 + 5))
+            val svc = Intent(ctx, RatesListService::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            svc.data = Uri.parse(svc.toUri(Intent.URI_INTENT_SCHEME))
+            rv.setRemoteAdapter(R.id.list, svc)
+            rv.setEmptyView(R.id.list, R.id.empty)
+            rv.setTextViewText(R.id.empty, "לא נבחרו פריטים — הקישו כדי לבחור באפליקציה")
+
+            val open = Intent(ctx, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            // template must be mutable so each row's fill-in intent (category) can be merged
+            rv.setPendingIntentTemplate(
+                R.id.list,
+                PendingIntent.getActivity(ctx, id * 10 + 1, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+            )
+            val openPi = PendingIntent.getActivity(ctx, id * 10 + 2, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            rv.setOnClickPendingIntent(R.id.empty, openPi)
+            rv.setOnClickPendingIntent(R.id.title, openPi)
             rv.setOnClickPendingIntent(
-                R.id.body,
-                PendingIntent.getActivity(
-                    ctx, id * 10 + 6,
-                    Intent(ctx, MainActivity::class.java).putExtra(EXTRA_CAT, tab)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                R.id.refresh,
+                PendingIntent.getBroadcast(
+                    ctx, id * 10 + 3,
+                    Intent(ctx, RatesWidget::class.java).setAction(ACTION_REFRESH),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
-
-            val rows = Repo.rows(ctx, cat, onlySelected = true).take(Catalog.WIDGET_MAX)
-            for (i in ROWS.indices) {
-                if (i < rows.size) {
-                    val r = rows[i]
-                    rv.setViewVisibility(ROWS[i], View.VISIBLE)
-                    rv.setTextViewText(NAMES[i], r.item.he)
-                    rv.setTextViewText(PRICES[i], r.price)
-                    rv.setTextViewText(CHGS[i], Repo.fmtPct(r.change))
-                    rv.setTextColor(CHGS[i], when { r.change == null -> MUTED; r.change > 0 -> UP; r.change < 0 -> DOWN; else -> MUTED })
-                } else rv.setViewVisibility(ROWS[i], View.GONE)
-            }
-            rv.setViewVisibility(R.id.empty, if (rows.isEmpty()) View.VISIBLE else View.GONE)
 
             val err = Repo.lastError(ctx)
             rv.setTextViewText(
@@ -151,6 +114,68 @@ class RatesWidget : AppWidgetProvider() {
                 }
             )
             mgr.updateAppWidget(id, rv)
+        }
+    }
+}
+
+/** Supplies the widget's scrolling list: all selected items, grouped by category. */
+class RatesListService : RemoteViewsService() {
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Factory(applicationContext)
+
+    private class Factory(val ctx: Context) : RemoteViewsService.RemoteViewsFactory {
+        private sealed class Entry {
+            class Header(val cat: Cat) : Entry()
+            class Line(val row: Row) : Entry()
+        }
+
+        private var entries: List<Entry> = emptyList()
+
+        private val UP = 0xFF3FB950.toInt()
+        private val DOWN = 0xFFF85149.toInt()
+        private val MUTED = 0xFF8B949E.toInt()
+
+        override fun onCreate() {}
+        override fun onDestroy() {}
+
+        override fun onDataSetChanged() {
+            val out = ArrayList<Entry>()
+            for (cat in Cat.values()) {
+                val rows = Repo.rows(ctx, cat, onlySelected = true)
+                if (rows.isEmpty()) continue
+                out.add(Entry.Header(cat))
+                rows.forEach { out.add(Entry.Line(it)) }
+            }
+            entries = out
+        }
+
+        override fun getCount() = entries.size
+        override fun getViewTypeCount() = 2
+        override fun getItemId(position: Int) = position.toLong()
+        override fun hasStableIds() = false
+        override fun getLoadingView(): RemoteViews? = null
+
+        override fun getViewAt(position: Int): RemoteViews {
+            val e = entries.getOrNull(position) ?: return RemoteViews(ctx.packageName, R.layout.widget_header)
+            return when (e) {
+                is Entry.Header -> RemoteViews(ctx.packageName, R.layout.widget_header).apply {
+                    setTextViewText(R.id.header, e.cat.he)
+                    setOnClickFillInIntent(R.id.header, Intent().putExtra(RatesWidget.EXTRA_CAT, e.cat.ordinal))
+                }
+                is Entry.Line -> RemoteViews(ctx.packageName, R.layout.widget_row).apply {
+                    val r = e.row
+                    val it = r.item
+                    val isFlag = it.color == 0
+                    setInt(R.id.icon_bg, "setColorFilter", if (isFlag) Catalog.NEUTRAL else it.color)
+                    setTextViewText(R.id.icon, it.glyph)
+                    setTextViewTextSize(R.id.icon, android.util.TypedValue.COMPLEX_UNIT_SP,
+                        when { isFlag -> 17f; it.glyph.length > 1 -> 12f; else -> 15f })
+                    setTextViewText(R.id.name, it.he)
+                    setTextViewText(R.id.price, r.price)
+                    setTextViewText(R.id.chg, Repo.fmtPct(r.change))
+                    setTextColor(R.id.chg, when { r.change == null -> MUTED; r.change > 0 -> UP; r.change < 0 -> DOWN; else -> MUTED })
+                    setOnClickFillInIntent(R.id.row, Intent().putExtra(RatesWidget.EXTRA_CAT, it.cat.ordinal))
+                }
+            }
         }
     }
 }

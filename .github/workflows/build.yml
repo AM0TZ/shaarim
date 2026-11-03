@@ -19,7 +19,8 @@ jobs:
           probe() { out=$(curl -sS -m 15 -A "RatesWidget/1.0 (Android)" "$1" 2>&1 | head -c 400 | tr '\n' ' '); echo "::notice title=$2::$out"; }
           probe "https://api.coinbase.com/v2/exchange-rates?currency=USD" coinbase-rates
           probe "https://api.exchange.coinbase.com/products/BTC-USD/stats" coinbase-btc
-          probe "https://api.exchange.coinbase.com/products/DOGE-USD/stats" coinbase-doge
+          probe "https://api.exchange.coinbase.com/products/QNT-USD/stats" coinbase-qnt
+          probe "https://api.exchange.coinbase.com/products/XLM-USD/stats" coinbase-xlm
           probe "https://api.gold-api.com/price/XAU" goldapi-xau
           probe "https://api.gold-api.com/price/XPD" goldapi-xpd
           curl -sS -m 15 "https://api.coinbase.com/v2/exchange-rates?currency=USD" | python3 -c "import sys,json; r=json.load(sys.stdin)['data']['rates']; print('::notice title=rates-keys::'+' '.join(k+'='+r.get(k,'MISSING') for k in ['ILS','EUR','GBP','CHF','JPY','CAD','AUD','CNY','TRY','RUB','XAU','XAG','XPT','XPD','AVAX','DOT','LINK']))"

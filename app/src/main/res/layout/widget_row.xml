@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/row" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingTop="5dp" android:paddingBottom="5dp" android:layoutDirection="rtl">
+
+    <FrameLayout android:layout_width="30dp" android:layout_height="30dp" android:layout_marginEnd="10dp">
+        <ImageView android:id="@+id/icon_bg" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:src="@drawable/icon_circle" />
+        <TextView android:id="@+id/icon" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:gravity="center" android:textColor="#FFFFFF" android:textSize="14sp" android:textStyle="bold"
+            android:includeFontPadding="false" />
+    </FrameLayout>
+
+    <TextView android:id="@+id/name" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1" android:textColor="#E6EDF3" android:textSize="16sp" android:maxLines="1"
+        android:ellipsize="end" android:textAlignment="viewStart" />
+    <TextView android:id="@+id/price" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textColor="#E6EDF3" android:textSize="16sp" android:fontFamily="monospace" android:textStyle="bold"
+        android:textDirection="ltr" />
+    <TextView android:id="@+id/chg" android:layout_width="72dp" android:layout_height="wrap_content"
+        android:textColor="#8B949E" android:textSize="13sp" android:fontFamily="monospace"
+        android:textDirection="ltr" android:gravity="end" />
+</LinearLayout>
