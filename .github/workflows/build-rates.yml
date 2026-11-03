@@ -1,0 +1,50 @@
+name: Build Rates Widget APK
+
+on:
+  push:
+    branches: [rates-widget]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Probe public data sources
+        run: |
+          probe() { out=$(curl -sS -m 15 -A "RatesWidget/1.0 (Android)" "$1" 2>&1 | head -c 400 | tr '\n' ' '); echo "::notice title=$2::$out"; }
+          probe "https://api.coinbase.com/v2/exchange-rates?currency=USD" coinbase-rates
+          probe "https://api.exchange.coinbase.com/products/BTC-USD/stats" coinbase-btc
+          probe "https://api.exchange.coinbase.com/products/DOGE-USD/stats" coinbase-doge
+          probe "https://api.gold-api.com/price/XAU" goldapi-xau
+          probe "https://api.gold-api.com/price/XPD" goldapi-xpd
+          curl -sS -m 15 "https://api.coinbase.com/v2/exchange-rates?currency=USD" | python3 -c "import sys,json; r=json.load(sys.stdin)['data']['rates']; print('::notice title=rates-keys::'+' '.join(k+'='+r.get(k,'MISSING') for k in ['ILS','EUR','GBP','CHF','JPY','CAD','AUD','CNY','TRY','RUB','XAU','XAG','XPT','XPD','AVAX','DOT','LINK']))"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --no-daemon 2>&1 | tee build.log || {
+            { grep -E "^e: " build.log; grep -vE "^> Task|^> Run with|^> Get more" build.log | grep -E "error:|What went wrong|Could not|^> |^  > "; } | head -9 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
+
+      - name: Publish APK as the "rates-widget-latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk RatesWidget.apk
+          gh release delete rates-widget-latest --yes --cleanup-tag || true
+          gh release create rates-widget-latest RatesWidget.apk --target "$GITHUB_SHA" --title "Rates Widget – latest build" --notes "Built from ${GITHUB_SHA::7}" --latest=false
