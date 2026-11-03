@@ -143,9 +143,9 @@ object Repo {
             val usdPrev = prev(p, item.code)
             when (item.cat) {
                 Cat.FIAT -> {
-                    val v = if (usd != null && ils != null) usd * ils else null
-                    val v0 = if (usdPrev != null && ilsPrev != null) usdPrev * ilsPrev else null
-                    Row(item, v?.let { "₪" + fmt(it) } ?: "—", pct(v, v0), "₪ ל־1 ${item.code}")
+                    val v = if (usd != null && ils != null) usd * ils * item.per else null
+                    val v0 = if (usdPrev != null && ilsPrev != null) usdPrev * ilsPrev * item.per else null
+                    Row(item, v?.let { "₪" + fmt(it) } ?: "—", pct(v, v0), "₪ ל־${item.per} ${item.code}")
                 }
                 Cat.CRYPTO -> {
                     val f = if (inIls) ils!! else 1.0

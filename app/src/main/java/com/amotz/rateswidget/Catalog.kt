@@ -3,7 +3,7 @@ package com.amotz.rateswidget
 enum class Cat(val he: String) { FIAT("מטבעות"), CRYPTO("קריפטו"), METAL("מתכות") }
 
 /** glyph + color = the item's quick-recognition icon. color 0 = neutral circle (used behind flags). */
-data class Item(val code: String, val cat: Cat, val he: String, val glyph: String, val color: Int)
+data class Item(val code: String, val cat: Cat, val he: String, val glyph: String, val color: Int, val per: Int = 1)
 
 private fun c(hex: String) = (0xFF000000 or hex.toLong(16)).toInt()
 
@@ -13,7 +13,7 @@ object Catalog {
         Item("EUR", Cat.FIAT, "אירו", "🇪🇺", 0),
         Item("GBP", Cat.FIAT, "לירה שטרלינג", "🇬🇧", 0),
         Item("CHF", Cat.FIAT, "פרנק שוויצרי", "🇨🇭", 0),
-        Item("JPY", Cat.FIAT, "ין יפני", "🇯🇵", 0),
+        Item("JPY", Cat.FIAT, "100 ין יפני", "🇯🇵", 0, per = 100),
         Item("CAD", Cat.FIAT, "דולר קנדי", "🇨🇦", 0),
         Item("AUD", Cat.FIAT, "דולר אוסטרלי", "🇦🇺", 0),
         Item("CNY", Cat.FIAT, "יואן סיני", "🇨🇳", 0),
