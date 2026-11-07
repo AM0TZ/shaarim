@@ -34,6 +34,7 @@ class RatesWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_REFRESH = "com.amotz.rateswidget.REFRESH"
         const val EXTRA_CAT = "cat"
+        const val EXTRA_CODE = "code"
 
         fun ids(ctx: Context): IntArray =
             AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, RatesWidget::class.java))
@@ -173,7 +174,7 @@ class RatesListService : RemoteViewsService() {
                     setTextViewText(R.id.price, r.price)
                     setTextViewText(R.id.chg, Repo.fmtPct(r.change))
                     setTextColor(R.id.chg, when { r.change == null -> MUTED; r.change > 0 -> UP; r.change < 0 -> DOWN; else -> MUTED })
-                    setOnClickFillInIntent(R.id.row, Intent().putExtra(RatesWidget.EXTRA_CAT, it.cat.ordinal))
+                    setOnClickFillInIntent(R.id.row, Intent().putExtra(RatesWidget.EXTRA_CAT, it.cat.ordinal).putExtra(RatesWidget.EXTRA_CODE, it.code))
                 }
             }
         }

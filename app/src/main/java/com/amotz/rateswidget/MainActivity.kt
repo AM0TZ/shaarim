@@ -50,6 +50,7 @@ class MainActivity : Activity() {
         }
         setContentView(ScrollView(this).apply { setBackgroundColor(BG); addView(root) })
         render()
+        openFromIntent(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -58,9 +59,20 @@ class MainActivity : Activity() {
             cat = Cat.values()[intent.getIntExtra(RatesWidget.EXTRA_CAT, 0).coerceIn(0, 2)]
             render()
         }
+        openFromIntent(intent)
     }
 
-    override fun onResume() { super.onResume(); ui.post(ticker) }
+    private fun openFromIntent(i: android.content.Intent?) {
+        val code = i?.getStringExtra(RatesWidget.EXTRA_CODE) ?: return
+        i.removeExtra(RatesWidget.EXTRA_CODE)
+        Catalog.get(code)?.let { root.post { HistoryDialog(this, it).show() } }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ui.post(ticker)
+        Thread { try { History.prefetch(applicationContext) } catch (_: Throwable) {} }.start()
+    }
     override fun onPause() { super.onPause(); ui.removeCallbacks(ticker) }
 
     private var busy = false
@@ -112,7 +124,7 @@ class MainActivity : Activity() {
         tabs.setPadding(dp(4), dp(4), dp(4), dp(4))
         root.addView(tabs)
 
-        root.addView(text("סמנו מה יוצג בווידג'ט — כל הנבחרים מוצגים יחד ברשימה אחת", 12f, MUTED).apply {
+        root.addView(text("סמנו מה יוצג בווידג'ט · הקישו על שורה לגרף היסטוריה", 12f, MUTED).apply {
             setPadding(0, dp(12), 0, dp(6))
         })
 
@@ -143,6 +155,11 @@ class MainActivity : Activity() {
                 when { r.change == null -> MUTED; r.change > 0 -> UP; r.change < 0 -> DOWN; else -> MUTED }, mono = true
             ).apply { textDirection = View.TEXT_DIRECTION_LTR })
             row.addView(v)
+            row.addView(text("‹", 20f, LINE).apply { setPadding(dp(10), 0, 0, 0) })
+            row.isClickable = true
+            row.background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(LINE), null, android.graphics.drawable.ColorDrawable(Color.WHITE))
+            row.setOnClickListener { HistoryDialog(this, r.item).show() }
             if (i > 0) list.addView(View(this).apply { setBackgroundColor(LINE) }, LinearLayout.LayoutParams(MATCH_PARENT, 1))
             list.addView(row)
         }
@@ -171,7 +188,7 @@ class MainActivity : Activity() {
                 setOnClickListener { mgr.requestPinAppWidget(ComponentName(this@MainActivity, RatesWidget::class.java), null, null) }
             }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) })
         }
-        root.addView(text("בווידג'ט: גוללים לרשימה המלאה, ⟳ לרענון, ונגיעה בשורה פותחת את האפליקציה בקטגוריה שלה.", 12f, MUTED).apply {
+        root.addView(text("בווידג'ט: גוללים לרשימה המלאה, ⟳ לרענון, ונגיעה בשורה פותחת את גרף ההיסטוריה שלה.", 12f, MUTED).apply {
             setPadding(0, dp(10), 0, 0)
         })
 
@@ -181,6 +198,7 @@ class MainActivity : Activity() {
             "• מטבעות: Coinbase exchange rates\n" +
             "• קריפטו: Coinbase Exchange (שינוי 24 שעות)\n" +
             "• מתכות: gold-api.com (מחיר ספוט)\n" +
+            "• היסטוריה (גרפים): Yahoo Finance, נשמרת במכשיר\n" +
             "• שינוי יומי במטבעות ובמתכות: Yahoo Finance (מול סגירה קודמת; במתכות לפי חוזי COMEX/NYMEX)\n" +
             "אם Yahoo לא זמין, השינוי מחושב מול הערך האחרון של אתמול שנשמר במכשיר.",
             11f, MUTED
