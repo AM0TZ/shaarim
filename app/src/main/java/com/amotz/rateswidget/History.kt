@@ -56,16 +56,23 @@ object History {
         Series(LongArray(t.length()) { t.getLong(it) }, DoubleArray(v.length()) { v.getDouble(it) }) to j.getLong("at")
     } catch (e: Throwable) { null }
 
-    private fun download(ctx: Context, sym: String, span: Span): Series {
-        val c = URL("https://query1.finance.yahoo.com/v8/finance/chart/$sym?range=${span.range}&interval=${span.interval}")
+    private fun fetch(host: String, sym: String, span: Span): String {
+        val c = URL("https://$host/v8/finance/chart/$sym?range=${span.range}&interval=${span.interval}")
             .openConnection() as HttpURLConnection
         c.connectTimeout = 8000; c.readTimeout = 10000
         c.setRequestProperty("User-Agent", UA)
-        val body = try {
+        return try {
             if (c.responseCode == 404) throw FileNotFoundException(sym)
             if (c.responseCode !in 200..299) throw RuntimeException("HTTP ${c.responseCode}")
             c.inputStream.bufferedReader().use { it.readText() }
         } finally { c.disconnect() }
+    }
+
+    private fun download(ctx: Context, sym: String, span: Span): Series {
+        val body = try { fetch("query1.finance.yahoo.com", sym, span) } catch (e: FileNotFoundException) { throw e } catch (e: Throwable) {
+            Thread.sleep(700)
+            fetch("query2.finance.yahoo.com", sym, span)    // backup host (e.g. after HTTP 429)
+        }
 
         val r = JSONObject(body).getJSONObject("chart").getJSONArray("result").getJSONObject(0)
         val ts = r.optJSONArray("timestamp") ?: JSONArray()
@@ -163,7 +170,7 @@ object History {
         for (item in Catalog.items.filter { it.code in sel }) {
             for (span in listOf(Span.Y1, Span.MAX)) {
                 try { series(ctx, item, span) } catch (_: Throwable) {}
-                Thread.sleep(250)
+                Thread.sleep(1500)   // gentle pacing, avoids HTTP 429
             }
         }
     }

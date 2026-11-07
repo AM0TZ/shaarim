@@ -55,7 +55,11 @@ object Repo {
 
     /** Daily change % (vs previous close) from Yahoo Finance chart meta. */
     private fun yahooChange(symbol: String): Double {
-        val m = JSONObject(get("https://query1.finance.yahoo.com/v8/finance/chart/$symbol?range=1d&interval=1d", BROWSER_UA))
+        val path = "/v8/finance/chart/$symbol?range=1d&interval=1d"
+        val body = try { get("https://query1.finance.yahoo.com$path", BROWSER_UA) } catch (t: Throwable) {
+            get("https://query2.finance.yahoo.com$path", BROWSER_UA)
+        }
+        val m = JSONObject(body)
             .getJSONObject("chart").getJSONArray("result").getJSONObject(0).getJSONObject("meta")
         if (m.has("regularMarketChangePercent")) return m.getDouble("regularMarketChangePercent")
         val price = m.getDouble("regularMarketPrice")
@@ -130,7 +134,7 @@ object Repo {
             // 3) daily change % from Yahoo Finance (fiat vs ILS, metals in USD); fallback = saved yesterday value
             val usdIlsChg = try { yahooChange("USDILS=X") } catch (t: Throwable) { null }
             if (usdIlsChg != null) e.putFloat("y_ILSRATE", usdIlsChg.toFloat()) else e.remove("y_ILSRATE")
-            val ypool = Executors.newFixedThreadPool(6)
+            val ypool = Executors.newFixedThreadPool(2)   // few parallel calls to Yahoo, avoids HTTP 429
             val yjobs = Catalog.items.filter { it.code in sel && it.cat != Cat.CRYPTO }.map { item ->
                 Callable {
                     val c = try {
@@ -140,7 +144,7 @@ object Repo {
                     item.code to c
                 }
             }
-            val yres = try { ypool.invokeAll(yjobs, 15, TimeUnit.SECONDS) } finally { ypool.shutdownNow() }
+            val yres = try { ypool.invokeAll(yjobs, 25, TimeUnit.SECONDS) } finally { ypool.shutdownNow() }
             for (f in yres) {
                 val (code, c) = try { f.get() } catch (t: Throwable) { continue }
                 if (c != null) e.putFloat("y_$code", c.toFloat()) else e.remove("y_$code")

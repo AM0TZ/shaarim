@@ -14,29 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Probe Yahoo history coverage
-        shell: python
-        run: |
-          import json, urllib.request
-          UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36"
-          def chart(sym, rng, iv):
-              try:
-                  r = urllib.request.urlopen(urllib.request.Request(
-                      f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range={rng}&interval={iv}", headers={"User-Agent": UA}), timeout=20)
-                  res = json.load(r)["chart"]["result"][0]
-                  c = [x for x in res["indicators"]["quote"][0]["close"] if x is not None]
-                  return f"{sym} {rng}/{iv}: {len(c)} pts {c[0]:.4g}->{c[-1]:.4g}"
-              except Exception as e:
-                  return f"{sym} {rng}/{iv}: ERR {e}"
-          syms = ["USDILS=X","EURILS=X","GBPILS=X","CHFILS=X","JPYILS=X","CADILS=X","AUDILS=X","TRYILS=X","USDCNY=X","USDRUB=X",
-                  "BTC-USD","ETH-USD","SOL-USD","XRP-USD","XLM-USD","QNT-USD","ADA-USD","DOGE-USD","LTC-USD","AVAX-USD","DOT-USD","LINK-USD",
-                  "GC=F","SI=F","PL=F","PA=F"]
-          a = [chart(s, "1y", "1d") for s in syms]
-          b = [chart("USDILS=X", r, i) for r, i in [("1d","5m"),("5d","30m"),("1mo","60m"),("6mo","1d"),("5y","1wk"),("10y","1wk"),("max","1mo")]]
-          b += [chart("BTC-USD", "max", "1mo"), chart("GC=F", "max", "1mo"), chart("QNT-USD", "1d", "5m")]
-          print("::notice title=yahoo-symbols::" + " | ".join(a))
-          print("::notice title=yahoo-ranges::" + " | ".join(b))
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
