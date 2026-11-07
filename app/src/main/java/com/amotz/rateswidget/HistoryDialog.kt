@@ -17,7 +17,7 @@ import android.widget.TextView
 import java.io.FileNotFoundException
 
 /** Popup with an item's price history and span chips (day … all). */
-class HistoryDialog(private val act: Activity, private val item: Item) {
+class HistoryDialog(private val act: Activity, private val item: Item, private val onClose: (() -> Unit)? = null) {
 
     private val CARD = Color.parseColor("#161B22")
     private val LINE = Color.parseColor("#2A3441")
@@ -105,7 +105,7 @@ class HistoryDialog(private val act: Activity, private val item: Item) {
             setLayout((act.resources.displayMetrics.widthPixels - dp(24)), WRAP_CONTENT)
             setDimAmount(0.6f)
         }
-        dialog.setOnDismissListener { token++ }
+        dialog.setOnDismissListener { token++; onClose?.invoke() }
         dialog.show()
         select(span)
     }

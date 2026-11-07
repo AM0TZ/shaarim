@@ -19,6 +19,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".HistoryActivity"
+            android:exported="false"
+            android:taskAffinity="com.amotz.rateswidget.history"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <receiver
             android:name=".RatesWidget"
             android:exported="true"

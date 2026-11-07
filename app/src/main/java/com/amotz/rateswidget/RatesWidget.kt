@@ -84,18 +84,24 @@ class RatesWidget : AppWidgetProvider() {
             svc.data = Uri.parse(svc.toUri(Intent.URI_INTENT_SCHEME))
             rv.setRemoteAdapter(R.id.list, svc)
             rv.setEmptyView(R.id.list, R.id.empty)
-            rv.setTextViewText(R.id.empty, "לא נבחרו פריטים — הקישו כדי לבחור באפליקציה")
+            rv.setTextViewText(R.id.empty, "לא נבחרו פריטים — הקישו כאן או על ⚙ כדי לבחור")
 
-            val open = Intent(ctx, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            // template must be mutable so each row's fill-in intent (category) can be merged
+            // row tap -> history popup only (transparent activity in its own task)
+            val hist = Intent(ctx, HistoryActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            // template must be mutable so each row's fill-in intent (item code) can be merged
             rv.setPendingIntentTemplate(
                 R.id.list,
-                PendingIntent.getActivity(ctx, id * 10 + 1, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+                PendingIntent.getActivity(ctx, id * 10 + 1, hist, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
             )
-            val openPi = PendingIntent.getActivity(ctx, id * 10 + 2, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            rv.setOnClickPendingIntent(R.id.empty, openPi)
-            rv.setOnClickPendingIntent(R.id.title, openPi)
+            // ⚙ -> settings screen
+            val settings = PendingIntent.getActivity(
+                ctx, id * 10 + 2,
+                Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            rv.setOnClickPendingIntent(R.id.settings, settings)
+            rv.setOnClickPendingIntent(R.id.empty, settings)
             rv.setOnClickPendingIntent(
                 R.id.refresh,
                 PendingIntent.getBroadcast(
@@ -160,8 +166,7 @@ class RatesListService : RemoteViewsService() {
             return when (e) {
                 is Entry.Header -> RemoteViews(ctx.packageName, R.layout.widget_header).apply {
                     setTextViewText(R.id.header, e.cat.he)
-                    setOnClickFillInIntent(R.id.header, Intent().putExtra(RatesWidget.EXTRA_CAT, e.cat.ordinal))
-                }
+                                    }
                 is Entry.Line -> RemoteViews(ctx.packageName, R.layout.widget_row).apply {
                     val r = e.row
                     val it = r.item

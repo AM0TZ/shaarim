@@ -161,7 +161,7 @@ class ChartView(ctx: Context) : View(ctx) {
 
     private fun axisDateFmt() = when (span) {
         Span.D1 -> "HH:mm"
-        Span.D5 -> "EEE"
+        Span.W1 -> "EEE"
         Span.M1, Span.M6 -> "d MMM"
         Span.Y1 -> "MMM yy"
         else -> "yyyy"

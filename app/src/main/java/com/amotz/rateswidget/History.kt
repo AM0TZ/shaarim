@@ -9,10 +9,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** Time span of a history view. ttl = how long a saved copy is considered fresh. */
-enum class Span(val he: String, val range: String, val interval: String, val ttlMin: Long, val intraday: Boolean) {
+enum class Span(val he: String, val range: String, val interval: String, val ttlMin: Long, val intraday: Boolean, val keepDays: Int = 0) {
     D1("יום", "1d", "5m", 5, true),
-    D5("5 ימים", "5d", "30m", 30, true),
-    M1("חודש", "1mo", "60m", 60, true),
+    W1("שבוע", "1mo", "60m", 30, true, keepDays = 7),      // last 7 days of the month series
+    M1("חודש", "1mo", "60m", 30, true),
     M6("חצי שנה", "6mo", "1d", 6 * 60, false),
     Y1("שנה", "1y", "1d", 12 * 60, false),
     Y5("5 שנים", "5y", "1wk", 24 * 60, false),
@@ -47,7 +47,7 @@ object History {
 
     private fun file(ctx: Context, sym: String, span: Span): File {
         val dir = File(ctx.filesDir, "hist").apply { mkdirs() }
-        return File(dir, sym.replace(Regex("[^A-Za-z0-9]"), "_") + "_" + span.name + ".json")
+        return File(dir, sym.replace(Regex("[^A-Za-z0-9]"), "_") + "_" + span.range + "_" + span.interval + ".json")
     }
 
     private fun readSaved(ctx: Context, sym: String, span: Span): Pair<Series, Long>? = try {
@@ -131,6 +131,14 @@ object History {
      * ounce or gram for metals). Null when nothing is available ([savedOnly] with no saved copy).
      */
     fun series(ctx: Context, item: Item, span: Span, savedOnly: Boolean = false, force: Boolean = false): Series? {
+        val s = compose(ctx, item, span, savedOnly, force) ?: return null
+        if (span.keepDays <= 0) return s
+        val from = s.t.last() - span.keepDays * 86_400_000L
+        val i0 = s.t.indexOfFirst { it >= from }.coerceAtLeast(0)
+        return Series(s.t.copyOfRange(i0, s.size), s.v.copyOfRange(i0, s.size))
+    }
+
+    private fun compose(ctx: Context, item: Item, span: Span, savedOnly: Boolean, force: Boolean): Series? {
         val ils = Repo.dispIls(ctx)
         fun g(sym: String) = raw(ctx, sym, span, savedOnly, force)
         return when (item.cat) {

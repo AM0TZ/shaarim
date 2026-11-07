@@ -50,7 +50,6 @@ class MainActivity : Activity() {
         }
         setContentView(ScrollView(this).apply { setBackgroundColor(BG); addView(root) })
         render()
-        openFromIntent(intent)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -59,13 +58,6 @@ class MainActivity : Activity() {
             cat = Cat.values()[intent.getIntExtra(RatesWidget.EXTRA_CAT, 0).coerceIn(0, 2)]
             render()
         }
-        openFromIntent(intent)
-    }
-
-    private fun openFromIntent(i: android.content.Intent?) {
-        val code = i?.getStringExtra(RatesWidget.EXTRA_CODE) ?: return
-        i.removeExtra(RatesWidget.EXTRA_CODE)
-        Catalog.get(code)?.let { root.post { HistoryDialog(this, it).show() } }
     }
 
     override fun onResume() {
@@ -97,7 +89,7 @@ class MainActivity : Activity() {
 
         // header
         val header = hbox()
-        header.addView(text("שערים בלייב", 22f, TEXT, bold = true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        header.addView(text("הגדרות · שערים בלייב", 20f, TEXT, bold = true), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         header.addView(Button(this).apply {
             text = if (busy) "מרענן…" else "רענון"
             isEnabled = !busy
@@ -188,11 +180,13 @@ class MainActivity : Activity() {
                 setOnClickListener { mgr.requestPinAppWidget(ComponentName(this@MainActivity, RatesWidget::class.java), null, null) }
             }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) })
         }
-        root.addView(text("בווידג'ט: גוללים לרשימה המלאה, ⟳ לרענון, ונגיעה בשורה פותחת את גרף ההיסטוריה שלה.", 12f, MUTED).apply {
+        root.addView(text("בווידג'ט: נגיעה בשורה פותחת את גרף ההיסטוריה, ⟳ מרענן, ו־⚙ פותח את המסך הזה.", 12f, MUTED).apply {
             setPadding(0, dp(10), 0, 0)
         })
 
         // sources
+        val ver = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Throwable) { "?" }
+        root.addView(text("גרסה $ver", 13f, TEXT).apply { setPadding(0, dp(18), 0, 0) })
         root.addView(text(
             "מקורות (ציבוריים, ללא מפתח):\n" +
             "• מטבעות: Coinbase exchange rates\n" +
